@@ -29,12 +29,12 @@
 
 import telebot
 
-from wat_bridge.static import SETTINGS, SIGNAL_WA, get_logger
 from wat_bridge.helper import db_add_contact, db_rm_contact, \
-        db_add_blacklist, db_rm_blacklist, db_list_contacts, \
-        get_blacklist, get_contact, get_phone, is_blacklisted, \
-        db_get_group, db_set_group, db_get_contact_by_group, safe_cast, \
-        wa_id_to_name, db_toggle_bridge_by_tg, db_is_bridge_enabled_by_tg
+    db_add_blacklist, db_rm_blacklist, db_list_contacts, \
+    get_blacklist, get_contact, get_phone, is_blacklisted, \
+    db_get_group, db_set_group, db_get_contact_by_group, safe_cast, \
+    wa_id_to_name, db_toggle_bridge_by_tg, db_is_bridge_enabled_by_tg
+from wat_bridge.static import SETTINGS, SIGNAL_WA, get_logger
 from wat_bridge.wa import wabot
 
 logger = get_logger('tg')
@@ -46,6 +46,7 @@ tgbot = telebot.TeleBot(
     skip_pending=False
 )
 
+
 # Create handlers
 
 @tgbot.message_handler(commands=['start', 'help'])
@@ -55,8 +56,7 @@ def start(message):
     Args:
         message: Received Telegram message.
     """
-    response = ('https://github.com/SpEcHiDe/wat-bridge\n\n'
-                'Usage:\n\n'
+    response = ('Usage:\n\n'
                 '   /help -> shows this help message\n'
                 '   /add <name> <phone> -> add a new contact to database\n'
                 '   /bind <name> <group id> -> bind a contact to a group\n'
@@ -74,9 +74,10 @@ def start(message):
                 ' Feature added by @SubinSiby\n\n'
                 'Note that blacklisting a phone number will make the bot ignore'
                 ' any Whatsapp messages that come from that number.'
-               )
+                )
 
     tgbot.reply_to(message, response)
+
 
 @tgbot.message_handler(commands=['me'])
 def me(message):
@@ -86,6 +87,7 @@ def me(message):
         message: Received Telegram message.
     """
     tgbot.reply_to(message, message.chat.id)
+
 
 @tgbot.message_handler(commands=['add'])
 def add_contact(message):
@@ -119,6 +121,7 @@ def add_contact(message):
     db_add_contact(name, phone)
 
     tgbot.reply_to(message, 'Contact added')
+
 
 @tgbot.message_handler(commands=['bind'])
 def bind(message):
@@ -164,6 +167,7 @@ def bind(message):
 
     tgbot.reply_to(message, 'Bound to group')
 
+
 @tgbot.message_handler(commands=['unbind'])
 def unbind(message):
     """Unbind a contact from his group.
@@ -201,6 +205,7 @@ def unbind(message):
     db_set_group(name, None)
 
     tgbot.reply_to(message, 'Unbound from group')
+
 
 @tgbot.message_handler(commands=['blacklist'])
 def blacklist(message):
@@ -244,6 +249,7 @@ def blacklist(message):
 
     tgbot.reply_to(message, 'Phone has been blacklisted')
 
+
 @tgbot.message_handler(commands=['contacts'])
 def list_contacts(message):
     """List stored contacts.
@@ -270,6 +276,7 @@ def list_contacts(message):
     response += str(len(contacts))
 
     tgbot.reply_to(message, response)
+
 
 @tgbot.message_handler(commands=['rm'])
 def rm_contact(message):
@@ -303,6 +310,7 @@ def rm_contact(message):
 
     tgbot.reply_to(message, 'Contact removed')
 
+
 @tgbot.message_handler(commands=['send'])
 def relay_wa(message):
     """Send a message to a contact through Whatsapp.
@@ -314,7 +322,7 @@ def relay_wa(message):
     Args:
         message: Received Telegram message.
     """
-    #if message.chat.id != SETTINGS['owner']:
+    # if message.chat.id != SETTINGS['owner']:
     #    tgbot.reply_to(message, 'you are not the owner of this bot')
     #    return
 
@@ -329,6 +337,7 @@ def relay_wa(message):
     # Relay
     logger.info('relaying message to Whatsapp')
     SIGNAL_WA.send('tgbot', contact=name, message=text)
+
 
 @tgbot.message_handler(commands=['unblacklist'])
 def unblacklist(message):
@@ -363,6 +372,7 @@ def unblacklist(message):
 
     tgbot.reply_to(message, 'Phone has been unblacklisted')
 
+
 @tgbot.message_handler(commands=['link'])
 def link(message):
     """Link a WhatsApp group
@@ -394,6 +404,7 @@ def link(message):
 
     tgbot.reply_to(message, 'Bridge Connected. Please subscribe to @WhatAppStatus for the bridge server informations.')
 
+
 @tgbot.message_handler(commands=['unlink'])
 def unlink(message):
     """Unlink bridge
@@ -420,6 +431,7 @@ def unlink(message):
 
     tgbot.reply_to(message, 'Bridge has been successfully removed.')
 
+
 @tgbot.message_handler(commands=['bridgeOn'])
 def bridge_on(message):
     """Turn on bridge
@@ -444,6 +456,7 @@ def bridge_on(message):
     db_toggle_bridge_by_tg(message.chat.id, True)
 
     tgbot.reply_to(message, 'Bridge has been turned on.')
+
 
 @tgbot.message_handler(commands=['bridgeOff'])
 def bridge_off(message):
@@ -470,6 +483,7 @@ def bridge_off(message):
 
     tgbot.reply_to(message, 'Bridge has been turned off. Use `/bridgeOn` to turn it back on')
 
+
 @tgbot.message_handler(func=lambda message: message.chat.type in ['group', 'supergroup'])
 def relay_group_wa(message):
     """ Send a message received in a bound group to the correspondending contact through Whatsapp.
@@ -480,28 +494,29 @@ def relay_group_wa(message):
 
     cid = message.chat.id
 
-    if db_is_bridge_enabled_by_tg(cid) == False:
+    if not db_is_bridge_enabled_by_tg(cid):
         return
 
     uid = message.from_user.id
     text = "<" + message.from_user.first_name + ">: " + message.text
 
-    #if uid != SETTINGS['owner']:
+    # if uid != SETTINGS['owner']:
     #    tgbot.reply_to(message, 'you are not the owner of this bot')
     #    return
 
     name = db_get_contact_by_group(group=cid)
     if not name:
         logger.info('no user is mapped to this group')
-        #tgbot.reply_to(message, 'no user is mapped to this group')
+        # tgbot.reply_to(message, 'no user is mapped to this group')
         return
 
     # Relay
     logger.info('relaying message to Whatsapp')
     SIGNAL_WA.send('tgbot', contact=name, message=text)
 
+
 @tgbot.message_handler(commands=['xsend'])
-def x_send_msg():
+def x_send_msg(message):
     if message.chat.id != SETTINGS['owner']:
         tgbot.reply_to(message, 'You are not the owner of this bot')
         return
@@ -510,24 +525,32 @@ def x_send_msg():
     phone, message = args.split(maxsplit=1)
     wabot.send_msg(phone=phone, message=message)
 
+
 # Handles all sent documents and audio files
-@tgbot.message_handler(content_types=['document', 'audio', 'photo', 'sticker', 'video', 'voice', 'video_note', 'contact', 'location'])
+@tgbot.message_handler(
+    content_types=['document', 'audio', 'photo', 'sticker', 'video',
+                   'voice', 'video_note', 'contact', 'location'])
 def handle_docs_audio(message):
     """ Handle media messages received in Telegram
     """
     cid = message.chat.id
 
-    if db_is_bridge_enabled_by_tg(cid) == False:
+    if not db_is_bridge_enabled_by_tg(cid):
         return
 
     caption = message.caption
     type = message.content_type
     name = db_get_contact_by_group(group=cid)
+
     if not name:
         logger.info('no user is mapped to this group')
-        #tgbot.reply_to(message, 'no user is mapped to this group')
+        # tgbot.reply_to(message, 'no user is mapped to this group')
         return
-    text = " " + message.from_user.first_name + " sent you " + type + " with caption " + caption + ". \r\nSending large files is not supported by WhatsApp at the moment, so switch to Telegram, and revolutionize the new era of messaging only on https://telegram.dog/dl "
+
+    text = " " + message.from_user.first_name + " sent you " + type + \
+           " with caption " + caption + \
+           ". \r\nSending large files is not supported by WhatsApp at the moment, " \
+           "so switch to Telegram, and revolutionize the new era of messaging only on https://telegram.dog/dl"
+
     logger.info('relaying message to Whatsapp')
     SIGNAL_WA.send('tgbot', contact=name, message=text)
-

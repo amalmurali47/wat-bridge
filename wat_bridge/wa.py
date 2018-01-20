@@ -27,25 +27,25 @@
 
 """Code for the Whatsapp side of the bridge."""
 
+import hashlib
+import os
+import uuid
+
 from yowsup.layers import YowLayerEvent
 from yowsup.layers.interface import YowInterfaceLayer, ProtocolEntityCallback
 from yowsup.layers.network import YowNetworkLayer
-from yowsup.layers.protocol_messages.protocolentities import TextMessageProtocolEntity
-from yowsup.layers.protocol_media.protocolentities import ImageDownloadableMediaMessageProtocolEntity
-from yowsup.layers.protocol_receipts.protocolentities import OutgoingReceiptProtocolEntity
 from yowsup.layers.protocol_acks.protocolentities import OutgoingAckProtocolEntity
+from yowsup.layers.protocol_messages.protocolentities import TextMessageProtocolEntity
+from yowsup.layers.protocol_receipts.protocolentities import OutgoingReceiptProtocolEntity
 from yowsup.stacks import YowStackBuilder
 
-from wat_bridge.static import SETTINGS, SIGNAL_TG, SIGNAL_WA, get_logger
-from wat_bridge.helper import is_blacklisted, get_phone, db_get_contact_by_group, \
-                              db_set_group, wa_id_to_name, db_toggle_bridge_by_wa, \
-                              db_is_bridge_enabled_by_wa, get_contact, db_add_contact
+from wat_bridge.helper import is_blacklisted, db_toggle_bridge_by_wa, \
+    db_is_bridge_enabled_by_wa, get_contact, db_add_contact, db_rm_contact
 
-import os
-import uuid
-import hashlib
+from wat_bridge.static import SETTINGS, SIGNAL_TG, get_logger
 
 logger = get_logger('wa')
+
 
 class WaLayer(YowInterfaceLayer):
     """Defines the yowsup layer for interacting with Whatsapp."""
@@ -81,10 +81,11 @@ class WaLayer(YowInterfaceLayer):
             return
 
         participant = message.getParticipant()
-        if participant :
-          participant = participant.strip("@s.whatsapp.net")
-        else :
-          participant = sender
+        if participant:
+            participant = participant.strip("@s.whatsapp.net")
+
+        else:
+            participant = sender
 
         contact_name = get_contact(participant)
 
@@ -96,108 +97,135 @@ class WaLayer(YowInterfaceLayer):
             if body == '/getID' or body == '/link':
                 self.send_msg(phone=sender, message="/link " + sender)
 
-                HelpInstructions = "Please send the above message in the Telegram group that you would like to bridge!"
-                self.send_msg(phone=sender, message=HelpInstructions)
+                help_instructions = "Please send the above message in the Telegram group that you would like to bridge!"
+                self.send_msg(phone=sender, message=help_instructions)
 
                 return
+
             elif body.startswith('/add'):
+
                 if participant == sender:
+
                     name = body[5:]
-                    if not name :
-                        ReplyMessage = "Syntax: /add <name>"
-                    else :
-                        if contact_name :
+
+                    if not name:
+                        reply_message = "Syntax: /add <name>"
+
+                    else:
+                        if contact_name:
                             db_rm_contact(contact_name)
                             db_add_contact(name, sender)
-                            ReplyMessage = "name already existed. name removed and added. Pleae verify with ```/me```"
-                        else :
+                            reply_message = "name already existed. name removed and added. Pleae verify with ```/me```"
+                        else:
                             db_add_contact(name, sender)
-                            ReplyMessage = "name added. Pleae verify with ```/me```"
-                    self.send_msg(phone=sender, message=ReplyMessage)
+                            reply_message = "name added. Pleae verify with ```/me```"
+                    self.send_msg(phone=sender, message=reply_message)
                     return
             elif body == '/me':
+
                 if not contact_name:
-                    ReplyMessage = "Please send ```/add NAME``` to add you to my contacts."
+                    reply_message = "Please send ```/add NAME``` to add you to my contacts."
+
                 else:
-                    ReplyMessage = "I have saved your name as " + contact_name + ". You can edit your name in my contacts by sending ```/add NAME```!"
+                    reply_message = "I have saved your name as " + contact_name + \
+                                    ". You can edit your name in my contacts by sending ```/add NAME```!"
+
                 if participant == sender:
-                    self.send_msg(phone=sender, message=ReplyMessage)
+                    self.send_msg(phone=sender, message=reply_message)
                     return
 
             elif body == '/bridgeOn':
                 toggle = db_toggle_bridge_by_wa(sender, True)
 
-                if toggle == None:
-                    Message = 'This group is not bridged to anywhere. Use ```/link``` to start bridging.'
+                if toggle is None:
+                    message = 'This group is not bridged to anywhere. Use ```/link``` to start bridging.'
                 else:
-                    Message = 'Bridge has been turned on!'
+                    message = 'Bridge has been turned on!'
 
-                self.send_msg(phone=sender, message=Message)
+                self.send_msg(phone=sender, message=message)
 
                 return
 
             elif body == '/bridgeOff':
                 toggle = db_toggle_bridge_by_wa(sender, False)
 
-                if toggle == None:
-                    Message = 'This group is not bridged to anywhere. Use ```/link``` to start bridging.'
+                if toggle is None:
+                    message = 'This group is not bridged to anywhere. Use ```/link``` to start bridging.'
                 else:
-                    Message = 'Bridge has been turned off. Use ```/bridgeOn``` to turn it back on.'
+                    message = 'Bridge has been turned off. Use ```/bridgeOn``` to turn it back on.'
 
-                self.send_msg(phone=sender, message=Message)
+                self.send_msg(phone=sender, message=message)
 
                 return
 
-            if db_is_bridge_enabled_by_wa(sender) == False:
+            if not db_is_bridge_enabled_by_wa(sender):
                 return
 
-            if contact_name :
-                TheRealMessageToSend = "<#" + contact_name + ">: " + body
-            else :
-                TheRealMessageToSend = "<" + participant + ">: " + body
+            if contact_name:
+                actual_message_to_send = "<#" + contact_name + ">: " + body
+            else:
+                actual_message_to_send = "<" + participant + ">: " + body
+
             # Relay to Telegram
             logger.info('relaying message to Telegram')
-            SIGNAL_TG.send('wabot', phone=sender, message=TheRealMessageToSend, media=False)
+            SIGNAL_TG.send('wabot', phone=sender, message=actual_message_to_send, media=False)
 
         if message.getType() == "media":
-          if not os.path.exists("./DOWNLOADS"):
-            os.makedirs("./DOWNLOADS")
-          # set unique filename
-          uniqueFilename = "./DOWNLOADS/%s-%s%s" % (hashlib.md5(str(message.getFrom(False)).encode('utf-8')).hexdigest(), uuid.uuid4().hex, message.getExtension())
-          if message.getMediaType() == "image":
-            logger.info("Echoing image %s to %s" % (message.url, message.getFrom(False)))
-            data = message.getMediaContent()
-            f = open(uniqueFilename, 'wb')
-            f.write(data)
-            f.close()
-          # https://github.com/AragurDEV/yowsup/pull/37
-          elif message.getMediaType() == "video":
-            logger.info("Echoing video %s to %s" % (message.url, message.getFrom(False)))
-            data = message.getMediaContent()
-            f = open(uniqueFilename, 'wb')
-            f.write(data)
-            f.close()
-          elif message.getMediaType() == "audio":
-            logger.info("Echoing audio %s to %s" % (message.url, message.getFrom(False)))
-            data = message.getMediaContent()
-            f = open(uniqueFilename, 'wb')
-            f.write(data)
-            f.close()
-          elif message.getMediaType() == "document":
-            logger.info("Echoing document %s to %s" % (message.url, message.getFrom(False)))
-            data = message.getMediaContent()
-            f = open(uniqueFilename, 'wb')
-            f.write(data)
-            f.close()
-          elif message.getMediaType() == "location":
-            logger.info("Echoing location (%s, %s) to %s" % (message.getLatitude(), message.getLongitude(), message.getFrom(False)))
-            uniqueFilename = "LOCATION=|=|=" + message.getLatitude() + "=|=|=" + message.getLongitude()
-          elif message.getMediaType() == "vcard":
-            logger.info("Echoing vcard (%s, %s) to %s" % (message.getName(), message.getCardData(), message.getFrom(False)))
-          TheRealMessageToSend = participant + "=|=|=" + uniqueFilename
-          # Relay to Telegram
-          logger.info('relaying message to Telegram')
-          SIGNAL_TG.send('wabot', phone=sender, message=TheRealMessageToSend, media=True)
+
+            if not os.path.exists("./DOWNLOADS"):
+                os.makedirs("./DOWNLOADS")
+
+            # set unique filename
+            unique_filename = "./DOWNLOADS/%s-%s%s" % (
+                hashlib.md5(str(message.getFrom(False)).encode('utf-8')).hexdigest(), 
+                uuid.uuid4().hex,
+                message.getExtension()
+            )
+            
+            if message.getMediaType() == "image":
+                logger.info("Echoing image %s to %s" % (message.url, message.getFrom(False)))
+                data = message.getMediaContent()
+                f = open(unique_filename, 'wb')
+                f.write(data)
+                f.close()
+                
+            # https://github.com/AragurDEV/yowsup/pull/37
+            elif message.getMediaType() == "video":
+                logger.info("Echoing video %s to %s" % (message.url, message.getFrom(False)))
+                data = message.getMediaContent()
+                f = open(unique_filename, 'wb')
+                f.write(data)
+                f.close()
+            
+            elif message.getMediaType() == "audio":
+                logger.info("Echoing audio %s to %s" % (message.url, message.getFrom(False)))
+                data = message.getMediaContent()
+                f = open(unique_filename, 'wb')
+                f.write(data)
+                f.close()
+            
+            elif message.getMediaType() == "document":
+                logger.info("Echoing document %s to %s" % (message.url, message.getFrom(False)))
+                data = message.getMediaContent()
+                f = open(unique_filename, 'wb')
+                f.write(data)
+                f.close()
+            
+            elif message.getMediaType() == "location":
+                logger.info("Echoing location (%s, %s) to %s" % (
+                message.getLatitude(), message.getLongitude(), message.getFrom(False)))
+                unique_filename = "LOCATION=|=|=" + message.getLatitude() + "=|=|=" + message.getLongitude()
+            
+            elif message.getMediaType() == "vcard":
+                logger.info(
+                    "Echoing vcard (%s, %s) to %s" % (message.getName(), message.getCardData(), message.getFrom(False)))
+                
+            actual_message_to_send = participant + "=|=|=" + unique_filename
+            
+            # Relay to Telegram
+            logger.info('relaying message to Telegram')
+            
+            SIGNAL_TG.send('wabot', phone=sender, message=actual_message_to_send, media=True)
 
     @ProtocolEntityCallback('receipt')
     def on_receipt(self, entity):
@@ -212,7 +240,7 @@ class WaLayer(YowInterfaceLayer):
             entity.getFrom()
         )
 
-        #self.toLower(ack)
+        # self.toLower(ack)
         self.toLower(entity.ack())
 
     def send_msg(self, **kwargs):
@@ -223,23 +251,22 @@ class WaLayer(YowInterfaceLayer):
             message (str): Message to send
         """
         phone = kwargs.get('phone')
-        toStr = ""
 
         if not phone:
             # Nothing to do
             logger.debug('no phone provided')
             return
 
-        if phone.find("-") > -1 :
-          toStr = phone + "@g.us"
-        else :
-          toStr = phone + "@s.whatsapp.net"
+        if phone.find("-") > -1:
+            recipient_identifier = phone + "@g.us"
+        else:
+            recipient_identifier = phone + "@s.whatsapp.net"
 
         message = kwargs.get('message').encode('utf8')
 
         entity = TextMessageProtocolEntity(
             message,
-            to=toStr
+            to=recipient_identifier
         )
 
         # self.ackQueue.append(entity.getId())
@@ -253,10 +280,10 @@ _connect_signal = YowLayerEvent(YowNetworkLayer.EVENT_STATE_CONNECT)
 
 WA_STACK = (
     YowStackBuilder()
-    .pushDefaultLayers(True)
-    # .pushDefaultLayers(False)
-    .push(wabot)
-    .build()
+        .pushDefaultLayers(True)
+        # .pushDefaultLayers(False)
+        .push(wabot)
+        .build()
 )
 
 WA_STACK.setCredentials((SETTINGS['wa_phone'], SETTINGS['wa_password']))

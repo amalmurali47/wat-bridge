@@ -35,6 +35,7 @@ from wat_bridge.wa import WA_STACK, _connect_signal
 
 logger = get_logger('listeners')
 
+
 def tg_listener():
     """Poll for new messages in Telegram."""
     while True:
@@ -55,6 +56,7 @@ def tg_listener():
         # Stop polling and restart it in next iteration
         logger.info('Stop polling')
         tgbot.stop_polling()
+
 
 def wa_listener():
     """Poll for new messages in Whatsapp."""

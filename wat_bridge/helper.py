@@ -28,7 +28,9 @@
 """Helper functions."""
 
 import hashlib
+
 from wat_bridge.static import DB, CONTACT
+
 
 def db_add_blacklist(phone):
     """Add a new blacklisted phone to the database.
@@ -40,6 +42,7 @@ def db_add_blacklist(phone):
         ID of the inserted element.
     """
     return DB.insert({'name': None, 'phone': phone, 'blacklisted': True, 'group': None})
+
 
 def db_add_contact(name, phone):
     """Add a new contact to the database.
@@ -53,6 +56,7 @@ def db_add_contact(name, phone):
     """
     return DB.insert({'name': name.lower(), 'phone': phone, 'blacklisted': False, 'group': None, 'enabled': True})
 
+
 def db_list_contacts():
     """Obtain a list of contacts.
 
@@ -65,6 +69,7 @@ def db_list_contacts():
 
     return [(a['name'], a['phone'], a.get('group')) for a in result]
 
+
 def db_rm_blacklist(phone):
     """Removes a blacklisted phone from the database.
 
@@ -73,6 +78,7 @@ def db_rm_blacklist(phone):
     """
     DB.remove((CONTACT.phone == phone) & (CONTACT.blacklisted == True))
 
+
 def db_rm_contact(name):
     """Remove a contact from the the database.
 
@@ -80,6 +86,7 @@ def db_rm_contact(name):
         name (str): Name of the contact to remove.
     """
     DB.remove(CONTACT.name == name.lower())
+
 
 def get_blacklist():
     """Obtain a list of blacklisted phones.
@@ -93,6 +100,7 @@ def get_blacklist():
         return []
 
     return [a['phone'] for a in result]
+
 
 def get_contact(phone):
     """Get contact name from a phone number.
@@ -110,6 +118,7 @@ def get_contact(phone):
 
     return result['name']
 
+
 def get_phone(contact):
     """Get phone number from a contact name.
 
@@ -125,6 +134,7 @@ def get_phone(contact):
         return None
 
     return result['phone']
+
 
 def is_blacklisted(phone):
     """Check if a phone number is blacklisted.
@@ -142,6 +152,7 @@ def is_blacklisted(phone):
 
     return True
 
+
 def db_get_group(contact):
     result = DB.get((CONTACT.name == contact.lower()))
 
@@ -151,11 +162,14 @@ def db_get_group(contact):
     # return None for backward compatibility if there is no group column
     return result.get('group')
 
+
 def db_set_group(contact, group):
     DB.update({'group': group}, (CONTACT.name == contact.lower()))
 
+
 def db_set_phone(contact, phone):
     DB.update({'phone': phone}, (CONTACT.name == contact.lower()))
+
 
 def db_toggle_bridge_by_tg(group, toggle):
     result = DB.get((CONTACT.group == group))
@@ -167,6 +181,7 @@ def db_toggle_bridge_by_tg(group, toggle):
 
     return toggle
 
+
 def db_toggle_bridge_by_wa(phone, toggle):
     result = DB.get((CONTACT.phone == phone))
 
@@ -177,6 +192,7 @@ def db_toggle_bridge_by_wa(phone, toggle):
 
     return toggle
 
+
 def db_is_bridge_enabled_by_tg(group):
     result = DB.get((CONTACT.group == group))
 
@@ -185,6 +201,7 @@ def db_is_bridge_enabled_by_tg(group):
 
     return result.get('enabled')
 
+
 def db_is_bridge_enabled_by_wa(phone):
     result = DB.get((CONTACT.phone == phone))
 
@@ -192,6 +209,7 @@ def db_is_bridge_enabled_by_wa(phone):
         return None
 
     return result.get('enabled')
+
 
 def db_get_contact_by_group(group):
     """Get phone number from a group id.
@@ -209,15 +227,16 @@ def db_get_contact_by_group(group):
 
     return result['name']
 
+
 def safe_cast(val, to_type, default=None):
     try:
         return to_type(val)
     except (ValueError, TypeError):
         return default
 
-def wa_id_to_name(val):
-    if val :
-        return hashlib.md5(str(val).encode('utf-8')).hexdigest()
-    else :
-        return None
 
+def wa_id_to_name(val):
+    if val:
+        return hashlib.md5(str(val).encode('utf-8')).hexdigest()
+    else:
+        return None
